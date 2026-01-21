@@ -1,5 +1,6 @@
 import docx
 import os
+import re
 from lxml import etree
 from pathlib import Path
 
@@ -47,10 +48,32 @@ def docx_to_markdown(docx_file, output_md):
 
             style_name = paragraph.style.name
 
+            # 先解析段落内容
+            paragraph_content = parse_run(paragraph, images)
+            
+            # 检查段落是否只包含图片或为空（没有文本内容）
+            # 如果内容去除图片标记后没有其他文本，则认为是纯图片段落或空段落
+            is_image_only_or_empty = False
+            if not paragraph_content.strip():
+                # 空段落
+                is_image_only_or_empty = True
+            else:
+                # 移除图片标记后检查是否还有文本
+                content_without_images = paragraph_content
+                # 移除HTML图片标签
+                content_without_images = re.sub(r'<img[^>]*>', '', content_without_images)
+                # 移除Markdown图片语法
+                content_without_images = re.sub(r'!\[.*?\]\(.*?\)', '', content_without_images)
+                # 如果去除图片后没有文本，则认为是纯图片段落
+                if not content_without_images.strip():
+                    is_image_only_or_empty = True
+
             #print("Style:", style_name)
             if "List" in style_name:
-                prefix = get_bullet_point_prefix(paragraph)
-                md_paragraph = prefix  # Markdown syntax for bullet points
+                # 如果列表项为空或只有图片，不添加列表前缀
+                if not is_image_only_or_empty:
+                    prefix = get_bullet_point_prefix(paragraph)
+                    md_paragraph = prefix  # Markdown syntax for bullet points
             elif "Heading 1" in style_name:
                 md_paragraph = "# "
             elif "Heading 2" in style_name:
@@ -62,7 +85,7 @@ def docx_to_markdown(docx_file, output_md):
             else:
                 print("Unsupported style:", style_name)
 
-            md_paragraph += parse_run(paragraph, images)
+            md_paragraph += paragraph_content
 
             markdown.append(md_paragraph)
 
