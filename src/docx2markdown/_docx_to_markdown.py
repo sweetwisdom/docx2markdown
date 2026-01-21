@@ -1,6 +1,9 @@
 import docx
 import os
 import re
+import uuid
+import time
+import random
 from lxml import etree
 from pathlib import Path
 
@@ -10,7 +13,8 @@ def docx_to_markdown(docx_file, output_md):
     folder = str(Path(output_md).parent)
     # 使用输出文件名（不含扩展名）作为图片文件夹名称
     output_filename = Path(output_md).stem
-    image_folder = str(Path(output_md).parent / f"{output_filename}-images")
+    # 图片文件夹格式：.imgs/文件名/
+    image_folder = str(Path(output_md).parent / ".imgs" / output_filename)
     
     doc = docx.Document(docx_file)
 
@@ -135,7 +139,21 @@ def extract_r_embed(xml_string):
 def save_image(image_part, output_folder):
     """Save an image to the output folder and return the filename and size."""
     os.makedirs(output_folder, exist_ok=True)
-    image_filename = os.path.join(output_folder, os.path.basename(image_part.partname))
+    
+    # 获取原始文件扩展名
+    original_name = os.path.basename(image_part.partname)
+    original_ext = Path(original_name).suffix
+    # 如果没有扩展名，尝试从内容推断（简单处理，默认使用 .png）
+    if not original_ext:
+        original_ext = ".png"
+    
+    # 使用短唯一标识符：时间戳（6位十六进制）+ 随机数（4位十六进制）
+    # 总共10位，比UUID的32位短很多，且足够唯一
+    timestamp_hex = format(int(time.time() * 100) & 0xFFFFFF, '06x')  # 6位时间戳（毫秒级）
+    random_hex = format(random.randint(0, 0xFFFF), '04x')  # 4位随机数
+    unique_filename = f"{timestamp_hex}{random_hex}{original_ext}"
+    image_filename = os.path.join(output_folder, unique_filename)
+    
     with open(image_filename, "wb") as img_file:
         img_file.write(image_part.blob)
     # 获取图片大小（字节数）

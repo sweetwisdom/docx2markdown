@@ -5,10 +5,14 @@ from docx.oxml.ns import qn  # QName helper for namespaces
 
 import os
 import re
+from pathlib import Path
 
 def markdown_to_docx(markdown_file, output_docx):
     """Convert a Markdown file to a .docx file."""
     doc = Document()
+    
+    # 获取 markdown 文件所在目录，用于解析相对路径
+    md_file_dir = Path(markdown_file).parent
 
     with open(markdown_file, "r", encoding="utf-8") as md_file:
         lines = md_file.readlines()
@@ -50,16 +54,37 @@ def markdown_to_docx(markdown_file, output_docx):
             text = line.split(". ", 1)[1]
             doc.add_paragraph(text, style="List Number")
 
-        # Images (e.g., ![alt text](image_path))
+        # Images - Markdown format: ![alt text](image_path)
         elif line.startswith("![") and "](" in line:
             alt_text = re.search(r"!\[(.*?)\]", line).group(1)
             image_path = re.search(r"\((.*?)\)", line).group(1)
-
-            if os.path.exists(image_path):
-                #doc.add_paragraph(f"Image: {alt_text}")  # Add alt text
-                doc.add_picture(image_path, width=Inches(3.0))  # Adjust image width
+            # 处理相对路径
+            image_path = resolve_image_path(image_path, md_file_dir)
+            
+            if image_path and os.path.exists(image_path):
+                try:
+                    doc.add_picture(image_path, width=Inches(3.0))
+                except Exception as e:
+                    doc.add_paragraph(f"[Image error: {alt_text} - {str(e)}]")
             else:
                 doc.add_paragraph(f"[Image not found: {alt_text}]")
+        
+        # Images - HTML format: <img src="..." class="icon" />
+        elif "<img" in line and "src=" in line:
+            # 提取图片路径
+            img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', line)
+            if img_match:
+                image_path = img_match.group(1)
+                # 处理相对路径
+                image_path = resolve_image_path(image_path, md_file_dir)
+                
+                if image_path and os.path.exists(image_path):
+                    try:
+                        doc.add_picture(image_path, width=Inches(3.0))
+                    except Exception as e:
+                        doc.add_paragraph(f"[Image error: {str(e)}]")
+                else:
+                    doc.add_paragraph(f"[Image not found: {image_path}]")
 
         # Links (e.g., [text](url))
         elif "[" in line and "](" in line:
@@ -191,6 +216,33 @@ def add_bullet_point(doc, text, level):
         numId = OxmlElement("w:numId")
         numPr.append(numId)
     numId.set(qn("w:val"), "1")  # Use numbering ID 1 (default for List Bullet)
+
+
+def resolve_image_path(image_path, md_file_dir):
+    """
+    解析图片路径，支持相对路径和绝对路径。
+    
+    :param image_path: 图片路径（可能是相对路径或绝对路径）
+    :param md_file_dir: Markdown 文件所在目录
+    :return: 解析后的绝对路径，如果路径无效返回 None
+    """
+    if not image_path:
+        return None
+    
+    # 移除开头的 ./
+    if image_path.startswith("./"):
+        image_path = image_path[2:]
+    
+    # 如果是绝对路径，直接返回
+    if os.path.isabs(image_path):
+        return image_path if os.path.exists(image_path) else None
+    
+    # 相对路径：相对于 markdown 文件所在目录
+    full_path = md_file_dir / image_path
+    if full_path.exists():
+        return str(full_path)
+    
+    return None
 
 
 def parse_and_add_text_with_formatting(doc, line):
