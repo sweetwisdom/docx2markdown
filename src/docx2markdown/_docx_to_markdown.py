@@ -7,7 +7,9 @@ def docx_to_markdown(docx_file, output_md):
     """Convert a .docx file to a Markdown file and a subfolder of images."""
 
     folder = str(Path(output_md).parent)
-    image_folder = str(Path(output_md).parent / "images")
+    # 使用输出文件名（不含扩展名）作为图片文件夹名称
+    output_filename = Path(output_md).stem
+    image_folder = str(Path(output_md).parent / f"{output_filename}-images")
     
     doc = docx.Document(docx_file)
 
@@ -19,10 +21,22 @@ def docx_to_markdown(docx_file, output_md):
 
     # save all images
     images = {}
+    folder_path = Path(folder)
     for rel in doc.part.rels.values():
         if "image" in rel.reltype:
-            image_filename = save_image(rel.target_part, image_folder)
-            images[rel.rId] = image_filename[len(folder)-1:]
+            image_info = save_image(rel.target_part, image_folder)
+            # 存储相对路径（相对于输出文件夹）和大小信息
+            # 使用Path对象计算相对路径
+            full_image_path = Path(image_info["path"])
+            try:
+                relative_path = full_image_path.relative_to(folder_path)
+            except ValueError:
+                # 如果路径不在folder下，使用原始方式
+                relative_path = Path(image_info["path"][len(folder):].lstrip("/\\"))
+            images[rel.rId] = {
+                "path": str(relative_path).replace("\\", "/"),
+                "size": image_info["size"]
+            }
 
     #print("images", images)
     
@@ -96,12 +110,15 @@ def extract_r_embed(xml_string):
     return None
 
 def save_image(image_part, output_folder):
-    """Save an image to the output folder and return the filename."""
+    """Save an image to the output folder and return the filename and size."""
     os.makedirs(output_folder, exist_ok=True)
     image_filename = os.path.join(output_folder, os.path.basename(image_part.partname))
     with open(image_filename, "wb") as img_file:
         img_file.write(image_part.blob)
-    return str(image_filename).replace("\\", "/")
+    # 获取图片大小（字节数）
+    image_size = len(image_part.blob)
+    image_path = str(image_filename).replace("\\", "/")
+    return {"path": image_path, "size": image_size}
 
 
 def get_list_level(paragraph):
@@ -133,8 +150,15 @@ def parse_run(run, images):
             text += f"[{s.text}]({s.address})"
         elif isinstance(s, docx.drawing.Drawing):
             rId = extract_r_embed(s._element.xml)
-            image_url = images[rId]
-            text += f"![]({image_url})"
+            image_info = images[rId]
+            image_path = image_info["path"]
+            image_size = image_info["size"]
+            # 如果图片小于20KB，使用HTML格式并添加class="icon"
+            if image_size < 20480:  # 20KB = 20480 bytes
+                text += f'<img src="./{image_path}" class="icon" />'
+            else:
+                # 大于等于20KB的图片使用Markdown格式
+                text += f"![](./{image_path})"
         else:
             print("unknown run type", s)
 
