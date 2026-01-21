@@ -13,12 +13,28 @@ import sys
 import os
 
 # 添加 src 目录到路径
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# PyInstaller 打包后使用 sys._MEIPASS，否则使用当前文件目录
+if getattr(sys, 'frozen', False):
+    # 打包后的情况：模块在 sys._MEIPASS/docx2markdown 目录下
+    base_path = sys._MEIPASS
+    # 添加 docx2markdown 目录到路径
+    sys.path.insert(0, os.path.join(base_path, 'docx2markdown'))
+    # 也添加父目录，以防万一
+    sys.path.insert(0, base_path)
+else:
+    # 开发环境：模块在 src 目录下
+    base_path = os.path.dirname(__file__)
+    src_path = os.path.join(base_path, 'src')
+    sys.path.insert(0, src_path)
 
 try:
     from docx2markdown import docx_to_markdown, markdown_to_docx
-except ImportError:
-    messagebox.showerror("错误", "无法导入 docx2markdown 模块，请确保已安装依赖")
+except ImportError as e:
+    error_msg = f"无法导入 docx2markdown 模块: {str(e)}\n路径: {src_path}"
+    try:
+        messagebox.showerror("错误", error_msg)
+    except:
+        print(error_msg)
     sys.exit(1)
 
 
