@@ -2,7 +2,7 @@
 # 打包 DOCX to Markdown 转换工具
 
 # 清理之前的构建
-rm -rf build dist main.spec
+
 
 # 使用 PyInstaller 打包
 uv run pyinstaller -F -i icon.ico -w \

@@ -195,8 +195,8 @@ def parse_run(run, images):
             image_path = image_info["path"]
             image_size = image_info["size"]
             # 如果图片小于20KB，使用HTML格式并添加class="icon"
-            if image_size < 20480:  # 20KB = 20480 bytes
-                text += f'<img src="./{image_path}" class="icon" />'
+            if image_size < 1024*10:  # 10KB 
+                text += f'<img src="./{image_path}" class="img-icon image-with-shadow-base64" />'
             else:
                 # 大于等于20KB的图片使用Markdown格式
                 text += f"![](./{image_path})"

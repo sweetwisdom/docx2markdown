@@ -10,3 +10,4 @@ demo/test-text-output.md
 demo/images
 dist
 build
+*.spec
